@@ -5,6 +5,8 @@ from audiobook_generator.book_parsers.base_book_parser import get_book_parser
 from audiobook_generator.config.general_config import GeneralConfig
 from audiobook_generator.core.audio_tags import AudioTags
 from audiobook_generator.tts_providers.base_tts_provider import get_tts_provider
+from audiobook_generator.core.m4b_converter import make_m4b
+from audiobook_generator.core.metadata_generator import generate_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,11 @@ class AudiobookGenerator:
             else:
                 confirm_conversion()
 
+            book_title = book_parser.get_book_title()
+            book_author = book_parser.get_book_author()
+            chapter_files = []
+            chapter_names = []
+
             # Loop through each chapter and convert it to speech using the provided TTS provider
             for idx, (title, text) in enumerate(chapters, start=1):
                 if idx < self.config.chapter_start:
@@ -86,6 +93,15 @@ class AudiobookGenerator:
                     f"Converting chapter {idx}/{len(chapters)}: {title}, characters: {len(text)}"
                 )
 
+                output_file = os.path.join(self.config.output_folder,
+                                           f"{idx:04d}_{title}.{tts_provider.get_output_file_extension()}")
+                
+                if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                    logger.info(f"Skipping chapter {idx}/{len(chapters)}: {title}. Output file already exists.")
+                    chapter_files.append(output_file)
+                    chapter_names.append(title.replace("_", " "))
+                    continue
+
                 if self.config.output_text:
                     text_file = os.path.join(self.config.output_folder, f"{idx:04d}_{title}.txt")
                     with open(text_file, "w", encoding='utf-8') as file:
@@ -94,19 +110,22 @@ class AudiobookGenerator:
                 if self.config.preview:
                     continue
 
-                output_file = os.path.join(self.config.output_folder,
-                                           f"{idx:04d}_{title}.{tts_provider.get_output_file_extension()}")
-
-                audio_tags = AudioTags(title, book_parser.get_book_author(), book_parser.get_book_title(), idx)
+                audio_tags = AudioTags(title, book_author, book_title, idx)
                 tts_provider.text_to_speech(
                     text,
                     output_file,
                     audio_tags,
                 )
+
+                chapter_files.append(output_file)
+                chapter_names.append(title)
                 logger.info(
                     f"✅ Converted chapter {idx}/{len(chapters)}: {title}"
                 )
             logger.info(f"All chapters converted. 🎉🎉🎉")
+
+            generate_metadata(chapter_files, book_author, book_title, chapter_names, logger)
+            make_m4b(chapter_files, book_title, logger)
 
         except KeyboardInterrupt:
             logger.info("Job stopped by user.")

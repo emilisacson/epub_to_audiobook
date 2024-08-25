@@ -1,7 +1,9 @@
+import re
 import logging
 from typing import List
 from mutagen.id3._frames import TIT2, TPE1, TALB, TRCK
 from mutagen.id3 import ID3, ID3NoHeaderError
+from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
 
@@ -73,3 +75,26 @@ def is_special_char(char: str) -> bool:
     )  # special unicode punctuation
     logger.debug(f"is_special_char> char={char}, ord={ord_char}, result={result}")
     return result
+
+
+def sanitize_filename(filename):
+    # Remove any character that is not alphanumeric, a space, or an underscore
+    return re.sub(r'[<>:"/\\|?*]', '', filename)
+
+
+def get_duration(file_path):
+    audio = AudioSegment.from_file(file_path)
+    duration_milliseconds = len(audio)
+    return duration_milliseconds
+
+
+def convert_milliseconds(ms):
+    # Calculate the number of seconds, minutes, hours
+    seconds = (ms // 1000) % 60
+    minutes = (ms // (1000 * 60)) % 60
+    hours = ms // (1000 * 60 * 60)
+    # hours = (ms // (1000 * 60 * 60)) % 24
+    # days = ms // (1000 * 60 * 60 * 24)
+
+    # Return the formatted string
+    return f"{hours}h, {minutes}m, {seconds}s"
